@@ -1,3 +1,34 @@
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
+
+typedef DownloadListener = void Function(int total, int received, bool done);
+
 class HiDownload {
-  
+  int _total = 0, _received = 0;
+
+  Future<String> download({required String downloadUrl, required String fileName, required DownloadListener listener}) async {
+    debugPrint("start download");
+    var uri = Uri.parse(downloadUrl);
+    var request = http.Request('GET', uri);
+    var response = await http.Client().send(request);
+    _total = response.contentLength ?? 0;
+    var path = (await getApplicationDocumentsDirectory()).path;
+    final file = File('$path/$fileName');
+    final writeFile = file.openSync(mode: FileMode.write);
+    // 使用stream边下边存
+    response.stream.listen((value) {
+      writeFile.writeFromSync(value);
+      _received += value.length;
+      listener(_total, _received, false);
+      debugPrint("progress:${_received / _total}");
+    }).onDone(() async {
+      await writeFile.close();
+      listener(_total, _received, true);
+      debugPrint("download -- Done");
+    });
+    return file.absolute.path;
+  }
 }
